@@ -1,14 +1,14 @@
 #![feature(test)]
-extern crate forward_decay_reservoir;
+extern crate exponential_decay_reservoir;
 extern crate test;
 
-use forward_decay_reservoir::ForwardDecayReservoir;
+use exponential_decay_reservoir::ExponentialDecayReservoir;
 use std::time::{Instant, Duration};
 use test::Bencher;
 
 #[bench]
 fn update(b: &mut Bencher) {
-    let mut reservoir = ForwardDecayReservoir::new();
+    let mut reservoir = ExponentialDecayReservoir::new();
 
     for i in 0..1028 {
         reservoir.update(i);
@@ -21,7 +21,7 @@ fn update(b: &mut Bencher) {
 
 #[bench]
 fn update_at(b: &mut Bencher) {
-    let mut reservoir = ForwardDecayReservoir::new();
+    let mut reservoir = ExponentialDecayReservoir::new();
 
     for i in 0..1028 {
         reservoir.update(i);
@@ -35,7 +35,7 @@ fn update_at(b: &mut Bencher) {
 
 #[bench]
 fn snapshot(b: &mut Bencher) {
-    let mut reservoir = ForwardDecayReservoir::new();
+    let mut reservoir = ExponentialDecayReservoir::new();
 
     for i in 0..1028 {
         reservoir.update(i);
