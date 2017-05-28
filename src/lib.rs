@@ -15,7 +15,7 @@ struct WeightedSample {
     weight: f64,
 }
 
-pub struct ForwardDecayReservoir {
+pub struct ExponentialDecayReservoir {
     values: BTreeMap<NotNaN<f64>, WeightedSample>,
     alpha: f64,
     size: usize,
@@ -24,12 +24,12 @@ pub struct ForwardDecayReservoir {
     rng: XorShiftRng,
 }
 
-impl ForwardDecayReservoir {
-    pub fn new() -> ForwardDecayReservoir {
-        ForwardDecayReservoir::from_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
+impl ExponentialDecayReservoir {
+    pub fn new() -> ExponentialDecayReservoir {
+        ExponentialDecayReservoir::from_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
     }
 
-    pub fn from_size_and_alpha(size: usize, alpha: f64) -> ForwardDecayReservoir {
+    pub fn from_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayReservoir {
         let now = Instant::now();
 
         let mut rng = rand::thread_rng();
@@ -45,7 +45,7 @@ impl ForwardDecayReservoir {
             }
         }
 
-        ForwardDecayReservoir {
+        ExponentialDecayReservoir {
             values: BTreeMap::new(),
             alpha: alpha,
             size: size,
@@ -207,7 +207,7 @@ mod test {
 
     #[test]
     fn a_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
         for i in 0..1000 {
             histogram.update(i);
         }
@@ -223,7 +223,7 @@ mod test {
 
     #[test]
     fn a_histogram_of_100_out_of_10_elements() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
         for i in 0..10 {
             histogram.update(i);
         }
@@ -237,7 +237,7 @@ mod test {
 
     #[test]
     fn a_heavily_biased_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(1000, 0.01);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.01);
         for i in 0..100 {
             histogram.update(i);
         }
@@ -253,7 +253,7 @@ mod test {
 
     #[test]
     fn long_periods_of_inactivity_should_not_corrupt_sampling_state() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(10, 0.015);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(10, 0.015);
         let mut now = histogram.start_time;
 
         // add 1000 values at a rate of 10 values/second
@@ -290,7 +290,7 @@ mod test {
 
     #[test]
     fn spot_lift() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         let values_per_minute = 10;
@@ -313,7 +313,7 @@ mod test {
 
     #[test]
     fn spot_fall() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         let values_per_minute = 10;
@@ -336,7 +336,7 @@ mod test {
 
     #[test]
     fn quantiles_should_be_based_on_weights() {
-        let mut histogram = ForwardDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         for _ in 0..40 {

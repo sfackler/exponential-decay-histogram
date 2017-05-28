@@ -1,5 +1,5 @@
 [package]
-name = "forward-decay-reservoir"
+name = "exponential-decay-reservoir"
 version = "0.1.0"
 authors = ["Steven Fackler <sfackler@gmail.com>"]
 
