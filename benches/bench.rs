@@ -1,47 +1,47 @@
 #![feature(test)]
-extern crate exponential_decay_reservoir;
+extern crate exponential_decay_histogram;
 extern crate test;
 
-use exponential_decay_reservoir::ExponentialDecayReservoir;
+use exponential_decay_histogram::ExponentialDecayHistogram;
 use std::time::{Instant, Duration};
 use test::Bencher;
 
 #[bench]
 fn update(b: &mut Bencher) {
-    let mut reservoir = ExponentialDecayReservoir::new();
+    let mut histogram = ExponentialDecayHistogram::new();
 
     for i in 0..1028 {
-        reservoir.update(i);
+        histogram.update(i);
     }
 
-    b.iter(|| reservoir.update(0));
+    b.iter(|| histogram.update(0));
 
-    test::black_box(reservoir.snapshot());
+    test::black_box(histogram.snapshot());
 }
 
 #[bench]
 fn update_at(b: &mut Bencher) {
-    let mut reservoir = ExponentialDecayReservoir::new();
+    let mut histogram = ExponentialDecayHistogram::new();
 
     for i in 0..1028 {
-        reservoir.update(i);
+        histogram.update(i);
     }
 
     let mut now = Instant::now();
-    b.iter(|| reservoir.update_at(now, 0));
+    b.iter(|| histogram.update_at(now, 0));
 
-    test::black_box(reservoir.snapshot());
+    test::black_box(histogram.snapshot());
 }
 
 #[bench]
 fn snapshot(b: &mut Bencher) {
-    let mut reservoir = ExponentialDecayReservoir::new();
+    let mut histogram = ExponentialDecayHistogram::new();
 
     for i in 0..1028 {
-        reservoir.update(i);
+        histogram.update(i);
     }
 
-    b.iter(|| reservoir.snapshot());
+    b.iter(|| histogram.snapshot());
 }
 
 #[bench]

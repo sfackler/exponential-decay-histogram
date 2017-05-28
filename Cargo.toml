@@ -1,5 +1,5 @@
 [package]
-name = "exponential-decay-reservoir"
+name = "exponential-decay-histogram"
 version = "0.1.0"
 authors = ["Steven Fackler <sfackler@gmail.com>"]
 
