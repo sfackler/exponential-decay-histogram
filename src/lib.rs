@@ -18,7 +18,8 @@ struct WeightedSample {
 pub struct ExponentialDecayReservoir {
     values: BTreeMap<NotNaN<f64>, WeightedSample>,
     alpha: f64,
-    size: usize,
+    size: u64,
+    cap: usize,
     start_time: Instant,
     next_scale_time: Instant,
     rng: XorShiftRng,
@@ -42,19 +43,19 @@ impl ExponentialDecayReservoir {
 
     /// Returns a new reservoir configured with the specified size and alpha.
     ///
-    /// `size` specifies the number of elements which will be stored in the
-    /// reservoir. A larger size will provide more accurate measurements, but
-    /// with a higher memory overhead.
+    /// `cap` specifies the capacity of the reservoir. A larger size will
+    /// provide more accurate measurements, but with a higher memory overhead.
     ///
     /// `alpha` specifies the exponential decay factor. A larger factor biases
     /// the reservoir towards newer values.
-    pub fn from_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayReservoir {
+    pub fn from_size_and_alpha(cap: usize, alpha: f64) -> ExponentialDecayReservoir {
         let now = Instant::now();
 
         ExponentialDecayReservoir {
             values: BTreeMap::new(),
-            alpha: alpha,
-            size: size,
+            alpha,
+            cap,
+            size: 0,
             start_time: now,
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
             rng: rand::thread_rng().gen(),
@@ -73,6 +74,7 @@ impl ExponentialDecayReservoir {
     /// May panic if values are inserted at non-monotonically increasing times.
     pub fn update_at(&mut self, time: Instant, value: i64) {
         self.rescale_if_needed(time);
+        self.size += 1;
 
         let item_weight = self.weight(time);
         let sample = WeightedSample {
@@ -83,7 +85,7 @@ impl ExponentialDecayReservoir {
         let priority = item_weight / self.rng.gen::<Open01<f64>>().0;
         let priority = NotNaN::from(priority);
 
-        if self.values.len() < self.size {
+        if self.values.len() < self.cap {
             self.values.insert(priority, sample);
         } else {
             let first = *self.values.keys().next().unwrap();
@@ -120,7 +122,10 @@ impl ExponentialDecayReservoir {
                 acc + e.norm_weight
             });
 
-        Snapshot(entries)
+        Snapshot {
+            entries,
+            size: self.size,
+        }
     }
 
     fn weight(&self, time: Instant) -> f64 {
@@ -158,7 +163,10 @@ struct SnapshotEntry {
     quantile: NotNaN<f64>,
 }
 
-pub struct Snapshot(Vec<SnapshotEntry>);
+pub struct Snapshot {
+    entries: Vec<SnapshotEntry>,
+    size: u64,
+}
 
 impl Snapshot {
     /// Returns the value at a specified quantile in the snapshot, or 0 if it is
@@ -173,33 +181,33 @@ impl Snapshot {
     pub fn value(&self, quantile: f64) -> i64 {
         assert!(quantile >= 0. && quantile <= 1.);
 
-        if self.0.is_empty() {
+        if self.entries.is_empty() {
             return 0;
         }
 
         let quantile = NotNaN::from(quantile);
-        let idx = match self.0.binary_search_by(|e| e.quantile.cmp(&quantile)) {
+        let idx = match self.entries.binary_search_by(|e| e.quantile.cmp(&quantile)) {
             Ok(idx) => idx,
-            Err(idx) if idx >= self.0.len() => self.0.len() - 1,
+            Err(idx) if idx >= self.entries.len() => self.entries.len() - 1,
             Err(idx) => idx,
         };
 
-        self.0[idx].value
+        self.entries[idx].value
     }
 
     /// Returns the largest value in the snapshot, or 0 if it is empty.
     pub fn max(&self) -> i64 {
-        self.0.last().map_or(0, |e| e.value)
+        self.entries.last().map_or(0, |e| e.value)
     }
 
     /// Returns the smallest value in the snapshot, or 0 if it is empty.
     pub fn min(&self) -> i64 {
-        self.0.first().map_or(0, |e| e.value)
+        self.entries.first().map_or(0, |e| e.value)
     }
 
     /// Returns the mean of the values in the snapshot, or 0 if it is empty.
     pub fn mean(&self) -> f64 {
-        self.0
+        self.entries
             .iter()
             .map(|e| e.value as f64 * e.norm_weight)
             .sum::<f64>()
@@ -208,12 +216,12 @@ impl Snapshot {
     /// Returns the standard deviation of the values in the snapshot, or 0 if it
     /// is empty.
     pub fn stddev(&self) -> f64 {
-        if self.0.len() <= 1 {
+        if self.entries.len() <= 1 {
             return 0.;
         }
 
         let mean = self.mean();
-        let variance = self.0
+        let variance = self.entries
             .iter()
             .map(|e| {
                      let diff = e.value as f64 - mean;
@@ -222,6 +230,12 @@ impl Snapshot {
             .sum::<f64>();
 
         variance.sqrt()
+    }
+
+    /// Returns the number of values which have been written to the reservoir at
+    /// the time of the snapshot.
+    pub fn size(&self) -> u64 {
+        self.size
     }
 }
 
@@ -242,7 +256,7 @@ mod test {
 
         let snapshot = reservoir.snapshot();
 
-        assert_eq!(snapshot.0.len(), 100);
+        assert_eq!(snapshot.entries.len(), 100);
 
         assert_all_values_between(snapshot, 0..1000);
     }
@@ -256,7 +270,7 @@ mod test {
 
         let snapshot = reservoir.snapshot();
 
-        assert_eq!(snapshot.0.len(), 10);
+        assert_eq!(snapshot.entries.len(), 10);
 
         assert_all_values_between(snapshot, 0..10);
     }
@@ -272,7 +286,7 @@ mod test {
 
         let snapshot = reservoir.snapshot();
 
-        assert_eq!(snapshot.0.len(), 100);
+        assert_eq!(snapshot.entries.len(), 100);
 
         assert_all_values_between(snapshot, 0..100);
     }
@@ -290,7 +304,7 @@ mod test {
         }
 
         let snapshot = reservoir.snapshot();
-        assert_eq!(snapshot.0.len(), 10);
+        assert_eq!(snapshot.entries.len(), 10);
         assert_all_values_between(snapshot, 1000..2000);
 
         // wait for 15 hours and add another value.
@@ -301,7 +315,7 @@ mod test {
         reservoir.update_at(now, 2000);
 
         let snapshot = reservoir.snapshot();
-        assert_eq!(snapshot.0.len(), 2);
+        assert_eq!(snapshot.entries.len(), 2);
         assert_all_values_between(snapshot, 1000..3000);
 
         // add 1000 values at a rate of 10 values/second
@@ -310,7 +324,7 @@ mod test {
             reservoir.update_at(now, 3000 + i);
         }
         let snapshot = reservoir.snapshot();
-        assert_eq!(snapshot.0.len(), 10);
+        assert_eq!(snapshot.entries.len(), 10);
         assert_all_values_between(snapshot, 3000..4000);
     }
 
@@ -376,7 +390,7 @@ mod test {
         }
 
         let snapshot = reservoir.snapshot();
-        assert_eq!(snapshot.0.len(), 50);
+        assert_eq!(snapshot.entries.len(), 50);
 
         // the first added 40 items (177) have weights 1
         // the next added 10 items (9999) have weights ~6
@@ -386,7 +400,7 @@ mod test {
     }
 
     fn assert_all_values_between(snapshot: Snapshot, range: Range<i64>) {
-        for entry in &snapshot.0 {
+        for entry in &snapshot.entries {
             assert!(entry.value >= range.start && entry.value < range.end,
                     "snapshot value {} was not in {:?}",
                     entry.value,
