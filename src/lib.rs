@@ -101,7 +101,7 @@ impl ExponentialDecayReservoir {
                      SnapshotEntry {
                          value: s.value,
                          norm_weight: s.weight,
-                         quantile: 0.,
+                         quantile: NotNaN::from(0.),
                      }
                  })
             .collect::<Vec<_>>();
@@ -115,7 +115,7 @@ impl ExponentialDecayReservoir {
 
         entries
             .iter_mut()
-            .fold(0., |acc, e| {
+            .fold(NotNaN::from(0.), |acc, e| {
                 e.quantile = acc;
                 acc + e.norm_weight
             });
@@ -155,7 +155,7 @@ impl ExponentialDecayReservoir {
 struct SnapshotEntry {
     value: i64,
     norm_weight: f64,
-    quantile: f64,
+    quantile: NotNaN<f64>,
 }
 
 pub struct Snapshot(Vec<SnapshotEntry>);
@@ -178,8 +178,7 @@ impl Snapshot {
         }
 
         let quantile = NotNaN::from(quantile);
-        let idx = match self.0
-                  .binary_search_by(|e| NotNaN::from(e.quantile).cmp(&quantile)) {
+        let idx = match self.0.binary_search_by(|e| e.quantile.cmp(&quantile)) {
             Ok(idx) => idx,
             Err(idx) if idx >= self.0.len() => self.0.len() - 1,
             Err(idx) => idx,
