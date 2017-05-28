@@ -4,7 +4,7 @@ extern crate ordered_float;
 use ordered_float::NotNaN;
 use std::collections::BTreeMap;
 use std::time::{Instant, Duration};
-use rand::{Rng, Open01, XorShiftRng, SeedableRng};
+use rand::{Rng, Open01, XorShiftRng};
 
 const DEFAULT_SIZE: usize = 1028;
 const DEFAULT_ALPHA: f64 = 0.015;
@@ -51,26 +51,13 @@ impl ExponentialDecayReservoir {
     pub fn from_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayReservoir {
         let now = Instant::now();
 
-        let mut rng = rand::thread_rng();
-        let mut seed = [0; 4];
-        loop {
-            for n in &mut seed {
-                *n = rng.gen();
-            }
-
-            // XorShiftRng panics on a 0 seed since it's a fixed point
-            if seed.iter().any(|n| *n != 0) {
-                break;
-            }
-        }
-
         ExponentialDecayReservoir {
             values: BTreeMap::new(),
             alpha: alpha,
             size: size,
             start_time: now,
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
-            rng: XorShiftRng::from_seed(seed),
+            rng: rand::thread_rng().gen(),
         }
     }
 
@@ -83,8 +70,7 @@ impl ExponentialDecayReservoir {
     ///
     /// # Panics
     ///
-    /// May panic if non-monotonically increasing times are passed to this
-    /// method.
+    /// May panic if values are inserted at non-monotonically increasing times.
     pub fn update_at(&mut self, time: Instant, value: i64) {
         self.rescale_if_needed(time);
 
