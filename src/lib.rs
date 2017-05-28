@@ -24,11 +24,30 @@ pub struct ExponentialDecayReservoir {
     rng: XorShiftRng,
 }
 
+impl Default for ExponentialDecayReservoir {
+    fn default() -> ExponentialDecayReservoir {
+        ExponentialDecayReservoir::new()
+    }
+}
+
 impl ExponentialDecayReservoir {
+    /// Returns a new reservoir with a default configuration.
+    ///
+    /// The default size is 1028, which offers a 99.9% confidence level with a
+    /// 5% margin of error. The default alpha is 0.015, which heavily biases
+    /// towards the last 5 minutes of values.
     pub fn new() -> ExponentialDecayReservoir {
         ExponentialDecayReservoir::from_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
     }
 
+    /// Returns a new reservoir configured with the specified size and alpha.
+    ///
+    /// `size` specifies the number of elements which will be stored in the
+    /// reservoir. A larger size will provide more accurate measurements, but
+    /// with a higher memory overhead.
+    ///
+    /// `alpha` specifies the exponential decay factor. A larger factor biases
+    /// the reservoir towards newer values.
     pub fn from_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayReservoir {
         let now = Instant::now();
 
@@ -55,10 +74,17 @@ impl ExponentialDecayReservoir {
         }
     }
 
+    /// Inserts a value into the reservoir at the current time.
     pub fn update(&mut self, value: i64) {
         self.update_at(Instant::now(), value);
     }
 
+    /// Inserts a value into the reservoir at the specified time.
+    ///
+    /// # Panics
+    ///
+    /// May panic if non-monotonically increasing times are passed to this
+    /// method.
     pub fn update_at(&mut self, time: Instant, value: i64) {
         self.rescale_if_needed(time);
 
@@ -81,12 +107,7 @@ impl ExponentialDecayReservoir {
         }
     }
 
-    fn rescale_if_needed(&mut self, now: Instant) {
-        if now >= self.next_scale_time {
-            self.rescale(now);
-        }
-    }
-
+    /// Takes a snapshot of the current state of the reservoir.
     pub fn snapshot(&self) -> Snapshot {
         let mut entries = self.values
             .values()
@@ -120,6 +141,12 @@ impl ExponentialDecayReservoir {
         (self.alpha * time.as_secs() as f64).exp()
     }
 
+    fn rescale_if_needed(&mut self, now: Instant) {
+        if now >= self.next_scale_time {
+            self.rescale(now);
+        }
+    }
+
     fn rescale(&mut self, now: Instant) {
         self.next_scale_time = now + Duration::from_secs(RESCALE_THRESHOLD_SECS);
         let old_start_time = self.start_time;
@@ -148,6 +175,15 @@ struct SnapshotEntry {
 pub struct Snapshot(Vec<SnapshotEntry>);
 
 impl Snapshot {
+    /// Returns the value at a specified quantile in the snapshot, or 0 if it is
+    /// empty.
+    ///
+    /// For example, `snapshot.quantile(0.5)` returns the median value of the
+    /// snapshot.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `quantile` is not between 0 and 1 (inclusive).
     pub fn value(&self, quantile: f64) -> i64 {
         assert!(quantile >= 0. && quantile <= 1.);
 
@@ -166,14 +202,17 @@ impl Snapshot {
         self.0[idx].value
     }
 
+    /// Returns the largest value in the snapshot, or 0 if it is empty.
     pub fn max(&self) -> i64 {
         self.0.last().map_or(0, |e| e.value)
     }
 
+    /// Returns the smallest value in the snapshot, or 0 if it is empty.
     pub fn min(&self) -> i64 {
         self.0.first().map_or(0, |e| e.value)
     }
 
+    /// Returns the mean of the values in the snapshot, or 0 if it is empty.
     pub fn mean(&self) -> f64 {
         self.0
             .iter()
@@ -181,6 +220,8 @@ impl Snapshot {
             .sum::<f64>()
     }
 
+    /// Returns the standard deviation of the values in the snapshot, or 0 if it
+    /// is empty.
     pub fn stddev(&self) -> f64 {
         if self.0.len() <= 1 {
             return 0.;
