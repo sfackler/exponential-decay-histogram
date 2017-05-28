@@ -88,7 +88,7 @@ impl ExponentialDecayReservoir {
     pub fn update_at(&mut self, time: Instant, value: i64) {
         self.rescale_if_needed(time);
 
-        let item_weight = self.weight(time - self.start_time);
+        let item_weight = self.weight(time);
         let sample = WeightedSample {
             value,
             weight: item_weight,
@@ -137,8 +137,8 @@ impl ExponentialDecayReservoir {
         Snapshot(entries)
     }
 
-    fn weight(&self, time: Duration) -> f64 {
-        (self.alpha * time.as_secs() as f64).exp()
+    fn weight(&self, time: Instant) -> f64 {
+        (self.alpha * (time - self.start_time).as_secs() as f64).exp()
     }
 
     fn rescale_if_needed(&mut self, now: Instant) {
