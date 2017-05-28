@@ -87,7 +87,7 @@ impl ForwardDecayReservoir {
         }
     }
 
-    pub fn snapshot(&self) -> WeightedSnapshot {
+    pub fn snapshot(&self) -> Snapshot {
         let mut entries = self.values
             .values()
             .map(|s| {
@@ -113,7 +113,7 @@ impl ForwardDecayReservoir {
                 acc + e.norm_weight
             });
 
-        WeightedSnapshot(entries)
+        Snapshot(entries)
     }
 
     fn weight(&self, time: Duration) -> f64 {
@@ -145,9 +145,9 @@ struct SnapshotEntry {
     quantile: f64,
 }
 
-pub struct WeightedSnapshot(Vec<SnapshotEntry>);
+pub struct Snapshot(Vec<SnapshotEntry>);
 
-impl WeightedSnapshot {
+impl Snapshot {
     pub fn value(&self, quantile: f64) -> i64 {
         assert!(quantile >= 0. && quantile <= 1.);
 
@@ -359,7 +359,7 @@ mod test {
         assert_eq!(snapshot.value(0.75), 9999);
     }
 
-    fn assert_all_values_between(snapshot: WeightedSnapshot, range: Range<i64>) {
+    fn assert_all_values_between(snapshot: Snapshot, range: Range<i64>) {
         for entry in &snapshot.0 {
             assert!(entry.value >= range.start && entry.value < range.end,
                     "snapshot value {} was not in {:?}",
