@@ -206,15 +206,15 @@ mod test {
     use super::*;
 
     #[test]
-    fn a_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
+    fn a_reservoir_of_100_out_of_1000_elements() {
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
         for i in 0..1000 {
-            histogram.update(i);
+            reservoir.update(i);
         }
 
-        assert_eq!(histogram.values.len(), 100);
+        assert_eq!(reservoir.values.len(), 100);
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
 
         assert_eq!(snapshot.0.len(), 100);
 
@@ -222,13 +222,13 @@ mod test {
     }
 
     #[test]
-    fn a_histogram_of_100_out_of_10_elements() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
+    fn a_reservoir_of_100_out_of_10_elements() {
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(100, 0.99);
         for i in 0..10 {
-            histogram.update(i);
+            reservoir.update(i);
         }
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
 
         assert_eq!(snapshot.0.len(), 10);
 
@@ -236,15 +236,15 @@ mod test {
     }
 
     #[test]
-    fn a_heavily_biased_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.01);
+    fn a_heavily_biased_reservoir_of_100_out_of_1000_elements() {
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.01);
         for i in 0..100 {
-            histogram.update(i);
+            reservoir.update(i);
         }
 
-        assert_eq!(histogram.values.len(), 100);
+        assert_eq!(reservoir.values.len(), 100);
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
 
         assert_eq!(snapshot.0.len(), 100);
 
@@ -253,17 +253,17 @@ mod test {
 
     #[test]
     fn long_periods_of_inactivity_should_not_corrupt_sampling_state() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(10, 0.015);
-        let mut now = histogram.start_time;
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(10, 0.015);
+        let mut now = reservoir.start_time;
 
         // add 1000 values at a rate of 10 values/second
         let delta = Duration::from_millis(100);
         for i in 0..1000 {
             now += delta;
-            histogram.update_at(now, 1000 + i);
+            reservoir.update_at(now, 1000 + i);
         }
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
         assert_eq!(snapshot.0.len(), 10);
         assert_all_values_between(snapshot, 1000..2000);
 
@@ -272,84 +272,84 @@ mod test {
         // be reduced because of the very small scaling factor that will make
         // all existing priorities equal to zero after rescale.
         now += Duration::from_secs(15 * 60 * 60);
-        histogram.update_at(now, 2000);
+        reservoir.update_at(now, 2000);
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
         assert_eq!(snapshot.0.len(), 2);
         assert_all_values_between(snapshot, 1000..3000);
 
         // add 1000 values at a rate of 10 values/second
         for i in 0..1000 {
             now += delta;
-            histogram.update_at(now, 3000 + i);
+            reservoir.update_at(now, 3000 + i);
         }
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
         assert_eq!(snapshot.0.len(), 10);
         assert_all_values_between(snapshot, 3000..4000);
     }
 
     #[test]
     fn spot_lift() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut now = reservoir.start_time;
 
         let values_per_minute = 10;
         let values_interval = Duration::from_secs(60) / values_per_minute;
         // mode 1: steady regime for 120 minutes
         for _ in 0..120 * values_per_minute {
-            histogram.update_at(now, 177);
+            reservoir.update_at(now, 177);
             now += values_interval;
         }
 
         // switching to mode 2: 10 minutes with the same rate, but larger value
         for _ in 0..10 * values_per_minute {
-            histogram.update_at(now, 9999);
+            reservoir.update_at(now, 9999);
             now += values_interval;
         }
 
         // expect that the quantiles should be about mode 2 after 10 minutes
-        assert_eq!(histogram.snapshot().value(0.5), 9999);
+        assert_eq!(reservoir.snapshot().value(0.5), 9999);
     }
 
     #[test]
     fn spot_fall() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut now = reservoir.start_time;
 
         let values_per_minute = 10;
         let values_interval = Duration::from_secs(60) / values_per_minute;
         // mode 1: steady regime for 120 minutes
         for _ in 0..120 * values_per_minute {
-            histogram.update_at(now, 9998);
+            reservoir.update_at(now, 9998);
             now += values_interval;
         }
 
         // switching to mode 2: 10 minutes with the same rate, but smaller value
         for _ in 0..10 * values_per_minute {
-            histogram.update_at(now, 178);
+            reservoir.update_at(now, 178);
             now += values_interval;
         }
 
         // expect that the quantiles should be about mode 2 after 10 minutes
-        assert_eq!(histogram.snapshot().value(0.5), 178);
+        assert_eq!(reservoir.snapshot().value(0.5), 178);
     }
 
     #[test]
     fn quantiles_should_be_based_on_weights() {
-        let mut histogram = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut reservoir = ExponentialDecayReservoir::from_size_and_alpha(1000, 0.015);
+        let mut now = reservoir.start_time;
 
         for _ in 0..40 {
-            histogram.update_at(now, 177);
+            reservoir.update_at(now, 177);
         }
 
         now += Duration::from_secs(120);
 
         for _ in 0..10 {
-            histogram.update_at(now, 9999);
+            reservoir.update_at(now, 9999);
         }
 
-        let snapshot = histogram.snapshot();
+        let snapshot = reservoir.snapshot();
         assert_eq!(snapshot.0.len(), 50);
 
         // the first added 40 items (177) have weights 1
