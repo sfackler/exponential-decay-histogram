@@ -4,7 +4,7 @@ extern crate ordered_float;
 use ordered_float::NotNaN;
 use std::collections::BTreeMap;
 use std::time::{Instant, Duration};
-use rand::{Rng, Open01};
+use rand::{Rng, Open01, XorShiftRng, SeedableRng};
 
 const DEFAULT_SIZE: usize = 1028;
 const DEFAULT_ALPHA: f64 = 0.015;
@@ -21,6 +21,7 @@ pub struct ForwardDecayReservoir {
     size: usize,
     start_time: Instant,
     next_scale_time: Instant,
+    rng: XorShiftRng,
 }
 
 impl ForwardDecayReservoir {
@@ -31,12 +32,26 @@ impl ForwardDecayReservoir {
     pub fn from_size_and_alpha(size: usize, alpha: f64) -> ForwardDecayReservoir {
         let now = Instant::now();
 
+        let mut rng = rand::thread_rng();
+        let mut seed = [0; 4];
+        loop {
+            for n in &mut seed {
+                *n = rng.gen();
+            }
+
+            // XorShiftRng panics on a 0 seed since it's a fixed point
+            if seed.iter().any(|n| *n != 0) {
+                break;
+            }
+        }
+
         ForwardDecayReservoir {
             values: BTreeMap::new(),
             alpha: alpha,
             size: size,
             start_time: now,
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
+            rng: XorShiftRng::from_seed(seed),
         }
     }
 
@@ -53,7 +68,7 @@ impl ForwardDecayReservoir {
             weight: item_weight,
         };
         // Open01 since we don't want to divide by 0
-        let priority = item_weight / rand::thread_rng().gen::<Open01<f64>>().0;
+        let priority = item_weight / self.rng.gen::<Open01<f64>>().0;
         let priority = NotNaN::from(priority);
 
         if self.values.len() < self.size {
