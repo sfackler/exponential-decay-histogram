@@ -18,8 +18,8 @@ struct WeightedSample {
 pub struct ExponentialDecayHistogram {
     values: BTreeMap<NotNaN<f64>, WeightedSample>,
     alpha: f64,
-    size: u64,
-    cap: usize,
+    size: usize,
+    count: u64,
     start_time: Instant,
     next_scale_time: Instant,
     rng: XorShiftRng,
@@ -38,24 +38,24 @@ impl ExponentialDecayHistogram {
     /// 5% margin of error. The default alpha is 0.015, which heavily biases
     /// towards the last 5 minutes of values.
     pub fn new() -> ExponentialDecayHistogram {
-        ExponentialDecayHistogram::from_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
+        ExponentialDecayHistogram::with_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
     }
 
     /// Returns a new histogram configured with the specified size and alpha.
     ///
-    /// `cap` specifies the capacity of the histogram. A larger size will
-    /// provide more accurate measurements, but with a higher memory overhead.
+    /// `size` specifies the sizeof the histogram. A larger size will provide
+    /// more accurate measurements, but with a higher memory overhead.
     ///
     /// `alpha` specifies the exponential decay factor. A larger factor biases
     /// the histogram towards newer values.
-    pub fn from_size_and_alpha(cap: usize, alpha: f64) -> ExponentialDecayHistogram {
+    pub fn with_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayHistogram {
         let now = Instant::now();
 
         ExponentialDecayHistogram {
             values: BTreeMap::new(),
             alpha,
-            cap,
-            size: 0,
+            size,
+            count: 0,
             start_time: now,
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
             rng: rand::thread_rng().gen(),
@@ -74,7 +74,7 @@ impl ExponentialDecayHistogram {
     /// May panic if values are inserted at non-monotonically increasing times.
     pub fn update_at(&mut self, time: Instant, value: i64) {
         self.rescale_if_needed(time);
-        self.size += 1;
+        self.count += 1;
 
         let item_weight = self.weight(time);
         let sample = WeightedSample {
@@ -85,7 +85,7 @@ impl ExponentialDecayHistogram {
         let priority = item_weight / self.rng.gen::<Open01<f64>>().0;
         let priority = NotNaN::from(priority);
 
-        if self.values.len() < self.cap {
+        if self.values.len() < self.size {
             self.values.insert(priority, sample);
         } else {
             let first = *self.values.keys().next().unwrap();
@@ -124,7 +124,7 @@ impl ExponentialDecayHistogram {
 
         Snapshot {
             entries,
-            size: self.size,
+            count: self.count,
         }
     }
 
@@ -165,7 +165,7 @@ struct SnapshotEntry {
 
 pub struct Snapshot {
     entries: Vec<SnapshotEntry>,
-    size: u64,
+    count: u64,
 }
 
 impl Snapshot {
@@ -234,8 +234,8 @@ impl Snapshot {
 
     /// Returns the number of values which have been written to the histogram at
     /// the time of the snapshot.
-    pub fn size(&self) -> u64 {
-        self.size
+    pub fn count(&self) -> u64 {
+        self.count
     }
 }
 
@@ -247,7 +247,7 @@ mod test {
 
     #[test]
     fn a_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(100, 0.99);
         for i in 0..1000 {
             histogram.update(i);
         }
@@ -263,7 +263,7 @@ mod test {
 
     #[test]
     fn a_histogram_of_100_out_of_10_elements() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(100, 0.99);
         for i in 0..10 {
             histogram.update(i);
         }
@@ -277,7 +277,7 @@ mod test {
 
     #[test]
     fn a_heavily_biased_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(1000, 0.01);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.01);
         for i in 0..100 {
             histogram.update(i);
         }
@@ -293,7 +293,7 @@ mod test {
 
     #[test]
     fn long_periods_of_inactivity_should_not_corrupt_sampling_state() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(10, 0.015);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(10, 0.015);
         let mut now = histogram.start_time;
 
         // add 1000 values at a rate of 10 values/second
@@ -330,7 +330,7 @@ mod test {
 
     #[test]
     fn spot_lift() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         let values_per_minute = 10;
@@ -353,7 +353,7 @@ mod test {
 
     #[test]
     fn spot_fall() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         let values_per_minute = 10;
@@ -376,7 +376,7 @@ mod test {
 
     #[test]
     fn quantiles_should_be_based_on_weights() {
-        let mut histogram = ExponentialDecayHistogram::from_size_and_alpha(1000, 0.015);
+        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
         let mut now = histogram.start_time;
 
         for _ in 0..40 {
