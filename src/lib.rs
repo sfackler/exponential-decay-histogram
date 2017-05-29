@@ -96,7 +96,13 @@ impl ExponentialDecayHistogram {
     ///
     /// `alpha` specifies the exponential decay factor. A larger factor biases
     /// the histogram towards newer values.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` is zero.
     pub fn with_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayHistogram {
+        assert!(size > 0);
+
         let now = Instant::now();
 
         ExponentialDecayHistogram {
