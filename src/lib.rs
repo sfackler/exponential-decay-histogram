@@ -111,6 +111,7 @@ impl ExponentialDecayHistogram {
             size,
             count: 0,
             start_time: now,
+            // we store this explicitly because it's ~10% faster than doing the math on demand
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
             rng: rand::thread_rng().gen(),
         }
