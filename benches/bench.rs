@@ -3,7 +3,7 @@ extern crate exponential_decay_histogram;
 extern crate test;
 
 use exponential_decay_histogram::ExponentialDecayHistogram;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use test::Bencher;
 
 #[bench]
@@ -27,7 +27,7 @@ fn update_at(b: &mut Bencher) {
         histogram.update(i);
     }
 
-    let mut now = Instant::now();
+    let now = Instant::now();
     b.iter(|| histogram.update_at(now, 0));
 
     test::black_box(histogram.snapshot());
