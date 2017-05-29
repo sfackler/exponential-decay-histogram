@@ -1,3 +1,47 @@
+//! A histogram which exponentially weights in favor of recent values.
+//!
+//! Histograms compute statistics about the distribution of values in a data
+//! set. This histogram exponentially favors recent values over older ones,
+//! making it suitable for use cases such as monitoring the state of long
+//! running processes.
+//!
+//! The histogram does not store all values simultaneously, but rather a
+//! randomized subset. This allows us to put bounds on overall memory use
+//! regardless of the rate of events.
+//!
+//! This implementation is based on the `ExponentiallyDecayingReservoir` class
+//! in the Java [Metrics][1] library, which is itself based on the forward decay
+//! model described in [Cormode et al. 2009][2].
+//!
+//! [1]: http://metrics.dropwizard.io/3.2.2/
+//! [2]: http://dimacs.rutgers.edu/~graham/pubs/papers/fwddecay.pdf
+//!
+//! # Examples
+//!
+//! ```
+//! use exponential_decay_histogram::ExponentialDecayHistogram;
+//!
+//! # fn do_work() -> i64 { 0 }
+//! let mut histogram = ExponentialDecayHistogram::new();
+//!
+//! // Do some work for a while and fill the histogram with some information.
+//! // Even though we're putting 10000 values into the histogram, it will only
+//! // retain a set number of them.
+//! for _ in 0..10000 {
+//!     let size = do_work();
+//!     histogram.update(size);
+//! }
+//!
+//! // Take a snapshot to inspect the current state of the histogram.
+//! let snapshot = histogram.snapshot();
+//! println!("count: {}", snapshot.count());
+//! println!("min: {}", snapshot.min());
+//! println!("max: {}", snapshot.max());
+//! println!("mean: {}", snapshot.mean());
+//! println!("standard deviation: {}", snapshot.stddev());
+//! println!("median: {}", snapshot.value(0.5));
+//! println!("99th percentile: {}", snapshot.value(0.99));
+//! ```
 extern crate rand;
 extern crate ordered_float;
 
@@ -15,6 +59,9 @@ struct WeightedSample {
     weight: f64,
 }
 
+/// A histogram which exponentially weights in favor of recent values.
+///
+/// See the crate level documentation for more details.
 pub struct ExponentialDecayHistogram {
     values: BTreeMap<NotNaN<f64>, WeightedSample>,
     alpha: f64,
@@ -43,8 +90,9 @@ impl ExponentialDecayHistogram {
 
     /// Returns a new histogram configured with the specified size and alpha.
     ///
-    /// `size` specifies the sizeof the histogram. A larger size will provide
-    /// more accurate measurements, but with a higher memory overhead.
+    /// `size` specifies the number of values stored in the histogram. A larger
+    /// size will provide more accurate statistics, but with a higher memory
+    /// overhead.
     ///
     /// `alpha` specifies the exponential decay factor. A larger factor biases
     /// the histogram towards newer values.
