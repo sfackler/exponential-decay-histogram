@@ -42,6 +42,7 @@
 //! println!("median: {}", snapshot.value(0.5));
 //! println!("99th percentile: {}", snapshot.value(0.99));
 //! ```
+#![doc(html_root_url="https://docs.rs/exponential-decay-histogram/0.1.0")]
 extern crate rand;
 extern crate ordered_float;
 
