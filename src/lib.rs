@@ -26,7 +26,7 @@
 //!
 //! // Do some work for a while and fill the histogram with some information.
 //! // Even though we're putting 10000 values into the histogram, it will only
-//! // retain a set number of them.
+//! // retain a subset of them.
 //! for _ in 0..10000 {
 //!     let size = do_work();
 //!     histogram.update(size);
