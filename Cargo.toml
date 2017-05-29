@@ -2,6 +2,16 @@
 name = "exponential-decay-histogram"
 version = "0.1.0"
 authors = ["Steven Fackler <sfackler@gmail.com>"]
+description = "A histogram which exponentially weights in favor of recent values"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/sfackler/exponential-decay-histogram"
+documentation = "https://docs.rs/exponential-decay-histogram/0.1.0/exponential_decay_histogram"
+readme = "README.md"
+categories = ["data-structures"]
+keywords = ["metrics", "statistics"]
+
+[badges]
+travis-ci = { repository = "sfackler/exponential-decay-histogram" }
 
 [dependencies]
 ordered-float = "0.5.0"
