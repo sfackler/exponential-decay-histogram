@@ -1,5 +1,5 @@
 # exponential-decay-histogram
-[![CircleCI](https://circleci.com/gh/sfackler/exponential-decay-histogram.svg?style=badge)](https://circleci.com/gh/sfackler/exponential-decay-histogram)
+[![CircleCI](https://circleci.com/gh/sfackler/exponential-decay-histogram.svg?style=shield)](https://circleci.com/gh/sfackler/exponential-decay-histogram)
 
 [Documentation](https://docs.rs/exponential-decay-histogram)
 
