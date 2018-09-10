@@ -233,7 +233,7 @@ impl Snapshot {
     /// Returns the value at a specified quantile in the snapshot, or 0 if it is
     /// empty.
     ///
-    /// For example, `snapshot.quantile(0.5)` returns the median value of the
+    /// For example, `snapshot.value(0.5)` returns the median value of the
     /// snapshot.
     ///
     /// # Panics
