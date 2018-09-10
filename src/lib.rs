@@ -56,7 +56,7 @@ use rand::distributions::Open01;
 
 const DEFAULT_SIZE: usize = 1028;
 const DEFAULT_ALPHA: f64 = 0.015;
-const RESCALE_THRESHOLD_SECS: u64 = 60 * 60;
+const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
 struct WeightedSample {
     value: i64,
@@ -116,7 +116,7 @@ impl ExponentialDecayHistogram {
             count: 0,
             start_time: now,
             // we store this explicitly because it's ~10% faster than doing the math on demand
-            next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
+            next_scale_time: now + RESCALE_THRESHOLD,
             // using a SmallRng is ~10% faster than using thread_rng()
             rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
         }
@@ -199,7 +199,7 @@ impl ExponentialDecayHistogram {
     }
 
     fn rescale(&mut self, now: Instant) {
-        self.next_scale_time = now + Duration::from_secs(RESCALE_THRESHOLD_SECS);
+        self.next_scale_time = now + RESCALE_THRESHOLD;
         let old_start_time = self.start_time;
         self.start_time = now;
         let scaling_factor = (-self.alpha * (now - old_start_time).as_secs() as f64).exp();
