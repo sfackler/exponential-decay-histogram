@@ -116,6 +116,7 @@ impl ExponentialDecayHistogram {
             start_time: now,
             // we store this explicitly because it's ~10% faster than doing the math on demand
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
+            // using a SmallRng is ~10% faster than using thread_rng()
             rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
         }
     }
