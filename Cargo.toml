@@ -13,5 +13,5 @@ keywords = ["metrics", "statistics"]
 circle-ci = { repository = "sfackler/exponential-decay-histogram" }
 
 [dependencies]
-ordered-float = "0.5.0"
-rand = "0.4"
+ordered-float = "1.0"
+rand = "0.5"

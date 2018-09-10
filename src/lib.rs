@@ -46,10 +46,12 @@
 extern crate rand;
 extern crate ordered_float;
 
-use ordered_float::NotNaN;
+use ordered_float::NotNan;
 use std::collections::BTreeMap;
 use std::time::{Instant, Duration};
-use rand::{Rng, Open01, XorShiftRng};
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
+use rand::distributions::Open01;
 
 const DEFAULT_SIZE: usize = 1028;
 const DEFAULT_ALPHA: f64 = 0.015;
@@ -64,13 +66,13 @@ struct WeightedSample {
 ///
 /// See the crate level documentation for more details.
 pub struct ExponentialDecayHistogram {
-    values: BTreeMap<NotNaN<f64>, WeightedSample>,
+    values: BTreeMap<NotNan<f64>, WeightedSample>,
     alpha: f64,
     size: usize,
     count: u64,
     start_time: Instant,
     next_scale_time: Instant,
-    rng: XorShiftRng,
+    rng: SmallRng,
 }
 
 impl Default for ExponentialDecayHistogram {
@@ -114,7 +116,7 @@ impl ExponentialDecayHistogram {
             start_time: now,
             // we store this explicitly because it's ~10% faster than doing the math on demand
             next_scale_time: now + Duration::from_secs(RESCALE_THRESHOLD_SECS),
-            rng: rand::thread_rng().gen(),
+            rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
         }
     }
 
@@ -138,8 +140,8 @@ impl ExponentialDecayHistogram {
             weight: item_weight,
         };
         // Open01 since we don't want to divide by 0
-        let priority = item_weight / self.rng.gen::<Open01<f64>>().0;
-        let priority = NotNaN::from(priority);
+        let priority = item_weight / self.rng.sample::<f64, _>(&Open01);
+        let priority = NotNan::from(priority);
 
         if self.values.len() < self.size {
             self.values.insert(priority, sample);
@@ -159,7 +161,7 @@ impl ExponentialDecayHistogram {
                      SnapshotEntry {
                          value: s.value,
                          norm_weight: s.weight,
-                         quantile: NotNaN::from(0.),
+                         quantile: NotNan::from(0.),
                      }
                  })
             .collect::<Vec<_>>();
@@ -173,7 +175,7 @@ impl ExponentialDecayHistogram {
 
         entries
             .iter_mut()
-            .fold(NotNaN::from(0.), |acc, e| {
+            .fold(NotNan::from(0.), |acc, e| {
                 e.quantile = acc;
                 acc + e.norm_weight
             });
@@ -216,7 +218,7 @@ impl ExponentialDecayHistogram {
 struct SnapshotEntry {
     value: i64,
     norm_weight: f64,
-    quantile: NotNaN<f64>,
+    quantile: NotNan<f64>,
 }
 
 pub struct Snapshot {
@@ -241,7 +243,7 @@ impl Snapshot {
             return 0;
         }
 
-        let quantile = NotNaN::from(quantile);
+        let quantile = NotNan::from(quantile);
         let idx = match self.entries.binary_search_by(|e| e.quantile.cmp(&quantile)) {
             Ok(idx) => idx,
             Err(idx) if idx >= self.entries.len() => self.entries.len() - 1,
