@@ -43,6 +43,7 @@
 //! println!("99th percentile: {}", snapshot.value(0.99));
 //! ```
 #![doc(html_root_url="https://docs.rs/exponential-decay-histogram/0.1")]
+#![warn(missing_docs)]
 extern crate rand;
 extern crate ordered_float;
 
@@ -222,6 +223,7 @@ struct SnapshotEntry {
     quantile: NotNan<f64>,
 }
 
+/// A snapshot of the state of an `ExponentialDecayHistogram` at some point in time.
 pub struct Snapshot {
     entries: Vec<SnapshotEntry>,
     count: u64,
