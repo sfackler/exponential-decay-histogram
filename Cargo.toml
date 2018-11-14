@@ -14,4 +14,4 @@ circle-ci = { repository = "sfackler/exponential-decay-histogram" }
 
 [dependencies]
 ordered-float = "1.0"
-rand = "0.5"
+rand = "0.6"
