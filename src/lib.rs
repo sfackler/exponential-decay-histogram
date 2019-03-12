@@ -42,17 +42,19 @@
 //! println!("median: {}", snapshot.value(0.5));
 //! println!("99th percentile: {}", snapshot.value(0.99));
 //! ```
-#![doc(html_root_url="https://docs.rs/exponential-decay-histogram/0.1")]
+#![doc(html_root_url = "https://docs.rs/exponential-decay-histogram/0.1")]
 #![warn(missing_docs)]
-extern crate rand;
 extern crate ordered_float;
+extern crate rand;
 
 use ordered_float::NotNan;
-use std::collections::BTreeMap;
-use std::time::{Instant, Duration};
-use rand::{Rng, SeedableRng};
-use rand::rngs::SmallRng;
 use rand::distributions::Open01;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
+use std::collections::BTreeMap;
+use std::iter;
+use std::slice;
+use std::time::{Duration, Instant};
 
 const DEFAULT_SIZE: usize = 1028;
 const DEFAULT_ALPHA: f64 = 0.015;
@@ -157,15 +159,14 @@ impl ExponentialDecayHistogram {
 
     /// Takes a snapshot of the current state of the histogram.
     pub fn snapshot(&self) -> Snapshot {
-        let mut entries = self.values
+        let mut entries = self
+            .values
             .values()
-            .map(|s| {
-                     SnapshotEntry {
-                         value: s.value,
-                         norm_weight: s.weight,
-                         quantile: NotNan::from(0.),
-                     }
-                 })
+            .map(|s| SnapshotEntry {
+                value: s.value,
+                norm_weight: s.weight,
+                quantile: NotNan::from(0.),
+            })
             .collect::<Vec<_>>();
 
         entries.sort_by_key(|e| e.value);
@@ -175,12 +176,10 @@ impl ExponentialDecayHistogram {
             entry.norm_weight /= sum_weight;
         }
 
-        entries
-            .iter_mut()
-            .fold(NotNan::from(0.), |acc, e| {
-                e.quantile = acc;
-                acc + e.norm_weight
-            });
+        entries.iter_mut().fold(NotNan::from(0.), |acc, e| {
+            e.quantile = acc;
+            acc + e.norm_weight
+        });
 
         Snapshot {
             entries,
@@ -204,15 +203,18 @@ impl ExponentialDecayHistogram {
         self.start_time = now;
         let scaling_factor = (-self.alpha * (now - old_start_time).as_secs() as f64).exp();
 
-        self.values = self.values
+        self.values = self
+            .values
             .iter()
             .map(|(&k, v)| {
-                     (k * scaling_factor,
-                      WeightedSample {
-                          value: v.value,
-                          weight: v.weight * scaling_factor,
-                      })
-                 })
+                (
+                    k * scaling_factor,
+                    WeightedSample {
+                        value: v.value,
+                        weight: v.weight * scaling_factor,
+                    },
+                )
+            })
             .collect();
     }
 }
@@ -282,12 +284,13 @@ impl Snapshot {
         }
 
         let mean = self.mean();
-        let variance = self.entries
+        let variance = self
+            .entries
             .iter()
             .map(|e| {
-                     let diff = e.value as f64 - mean;
-                     e.norm_weight * diff * diff
-                 })
+                let diff = e.value as f64 - mean;
+                e.norm_weight * diff * diff
+            })
             .sum::<f64>();
 
         variance.sqrt()
@@ -297,6 +300,39 @@ impl Snapshot {
     /// the time of the snapshot.
     pub fn count(&self) -> u64 {
         self.count
+    }
+
+    /// Returns an iterator over the distinct values in the snapshot along with their weights.
+    pub fn values<'a>(&'a self) -> Values<'a> {
+        Values {
+            it: self.entries.iter().peekable(),
+        }
+    }
+}
+
+/// An iterator over the distinct values in a snapshot along with their weights.
+pub struct Values<'a> {
+    it: iter::Peekable<slice::Iter<'a, SnapshotEntry>>,
+}
+
+impl<'a> Iterator for Values<'a> {
+    type Item = (i64, f64);
+
+    fn next(&mut self) -> Option<(i64, f64)> {
+        let (value, mut weight) = match self.it.next() {
+            Some(v) => (v.value, v.norm_weight),
+            None => return None
+        };
+
+        loop {
+            match self.it.peek() {
+                Some(v) if v.value == value => weight += v.norm_weight,
+                _ => break,
+            }
+            self.it.next();
+        }
+
+        Some((value, weight))
     }
 }
 
@@ -462,10 +498,26 @@ mod test {
 
     fn assert_all_values_between(snapshot: Snapshot, range: Range<i64>) {
         for entry in &snapshot.entries {
-            assert!(entry.value >= range.start && entry.value < range.end,
-                    "snapshot value {} was not in {:?}",
-                    entry.value,
-                    range);
+            assert!(
+                entry.value >= range.start && entry.value < range.end,
+                "snapshot value {} was not in {:?}",
+                entry.value,
+                range
+            );
         }
+    }
+
+    #[test]
+    fn values() {
+        let mut histogram = ExponentialDecayHistogram::new();
+        let now = histogram.start_time;
+
+        histogram.update_at(now, 1);
+        histogram.update_at(now, 1);
+        histogram.update_at(now, 1);
+        histogram.update_at(now, 10);
+
+        let values = histogram.snapshot().values().collect::<Vec<_>>();
+        assert_eq!(values, vec![(1, 0.75), (10, 0.25)]);
     }
 }
