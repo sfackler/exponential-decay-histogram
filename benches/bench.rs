@@ -1,12 +1,10 @@
-#![feature(test)]
 extern crate exponential_decay_histogram;
-extern crate test;
+extern crate criterion;
 
 use exponential_decay_histogram::ExponentialDecayHistogram;
 use std::time::Instant;
-use test::Bencher;
+use criterion::{Bencher, Criterion};
 
-#[bench]
 fn update(b: &mut Bencher) {
     let mut histogram = ExponentialDecayHistogram::new();
 
@@ -16,10 +14,9 @@ fn update(b: &mut Bencher) {
 
     b.iter(|| histogram.update(0));
 
-    test::black_box(histogram.snapshot());
+    criterion::black_box(histogram.snapshot());
 }
 
-#[bench]
 fn update_at(b: &mut Bencher) {
     let mut histogram = ExponentialDecayHistogram::new();
 
@@ -30,10 +27,9 @@ fn update_at(b: &mut Bencher) {
     let now = Instant::now();
     b.iter(|| histogram.update_at(now, 0));
 
-    test::black_box(histogram.snapshot());
+    criterion::black_box(histogram.snapshot());
 }
 
-#[bench]
 fn snapshot(b: &mut Bencher) {
     let mut histogram = ExponentialDecayHistogram::new();
 
@@ -44,7 +40,16 @@ fn snapshot(b: &mut Bencher) {
     b.iter(|| histogram.snapshot());
 }
 
-#[bench]
 fn now(b: &mut Bencher) {
     b.iter(|| Instant::now());
+}
+
+fn main() {
+    Criterion::default()
+        .configure_from_args()
+        .bench_function("update", update)
+        .bench_function("update_at", update_at)
+        .bench_function("snapshot", snapshot)
+        .bench_function("now", now)
+        .final_summary();
 }
