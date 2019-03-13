@@ -12,6 +12,13 @@ keywords = ["metrics", "statistics"]
 [badges]
 circle-ci = { repository = "sfackler/exponential-decay-histogram" }
 
+[[bench]]
+name = "bench"
+harness = false
+
 [dependencies]
 ordered-float = "1.0"
 rand = "0.6"
+
+[dev-dependencies]
+criterion = "0.2"
