@@ -145,7 +145,7 @@ impl ExponentialDecayHistogram {
         };
         // Open01 since we don't want to divide by 0
         let priority = item_weight / self.rng.sample::<f64, _>(&Open01);
-        let priority = NotNan::from(priority);
+        let priority = NotNan::new(priority).unwrap();
 
         if self.values.len() < self.size {
             self.values.insert(priority, sample);
@@ -165,7 +165,7 @@ impl ExponentialDecayHistogram {
             .map(|s| SnapshotEntry {
                 value: s.value,
                 norm_weight: s.weight,
-                quantile: NotNan::from(0.),
+                quantile: NotNan::new(0.).unwrap(),
             })
             .collect::<Vec<_>>();
 
@@ -176,7 +176,7 @@ impl ExponentialDecayHistogram {
             entry.norm_weight /= sum_weight;
         }
 
-        entries.iter_mut().fold(NotNan::from(0.), |acc, e| {
+        entries.iter_mut().fold(NotNan::new(0.).unwrap(), |acc, e| {
             e.quantile = acc;
             acc + e.norm_weight
         });
@@ -248,7 +248,7 @@ impl Snapshot {
             return 0;
         }
 
-        let quantile = NotNan::from(quantile);
+        let quantile = NotNan::new(quantile).unwrap();
         let idx = match self.entries.binary_search_by(|e| e.quantile.cmp(&quantile)) {
             Ok(idx) => idx,
             Err(idx) if idx >= self.entries.len() => self.entries.len() - 1,
