@@ -1,6 +1,4 @@
 # exponential-decay-histogram
-[![CircleCI](https://circleci.com/gh/sfackler/exponential-decay-histogram.svg?style=shield)](https://circleci.com/gh/sfackler/exponential-decay-histogram)
-
 [Documentation](https://docs.rs/exponential-decay-histogram)
 
 A histogram which exponentially weights in favor of recent values.
