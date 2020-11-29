@@ -1,9 +1,9 @@
-extern crate exponential_decay_histogram;
 extern crate criterion;
+extern crate exponential_decay_histogram;
 
+use criterion::{Bencher, Criterion};
 use exponential_decay_histogram::ExponentialDecayHistogram;
 use std::time::Instant;
-use criterion::{Bencher, Criterion};
 
 fn update(b: &mut Bencher) {
     let mut histogram = ExponentialDecayHistogram::new();

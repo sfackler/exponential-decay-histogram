@@ -44,9 +44,6 @@
 //! ```
 #![doc(html_root_url = "https://docs.rs/exponential-decay-histogram/0.1")]
 #![warn(missing_docs)]
-extern crate ordered_float;
-extern crate rand;
-
 use ordered_float::NotNan;
 use rand::distributions::Open01;
 use rand::rngs::SmallRng;
@@ -56,8 +53,6 @@ use std::iter;
 use std::slice;
 use std::time::{Duration, Instant};
 
-const DEFAULT_SIZE: usize = 1028;
-const DEFAULT_ALPHA: f64 = 0.015;
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
 struct WeightedSample {
@@ -86,12 +81,17 @@ impl Default for ExponentialDecayHistogram {
 
 impl ExponentialDecayHistogram {
     /// Returns a new histogram with a default configuration.
-    ///
-    /// The default size is 1028, which offers a 99.9% confidence level with a
-    /// 5% margin of error. The default alpha is 0.015, which heavily biases
-    /// towards the last 5 minutes of values.
-    pub fn new() -> ExponentialDecayHistogram {
-        ExponentialDecayHistogram::with_size_and_alpha(DEFAULT_SIZE, DEFAULT_ALPHA)
+    pub fn new() -> Self {
+        Self::builder().build()
+    }
+
+    /// Returns a new builder to create a histogram with a custom configuration.
+    pub fn builder() -> Builder {
+        Builder {
+            now: Instant::now(),
+            size: 1028,
+            alpha: 0.015,
+        }
     }
 
     /// Returns a new histogram configured with the specified size and alpha.
@@ -106,22 +106,9 @@ impl ExponentialDecayHistogram {
     /// # Panics
     ///
     /// Panics if `size` is zero.
-    pub fn with_size_and_alpha(size: usize, alpha: f64) -> ExponentialDecayHistogram {
-        assert!(size > 0);
-
-        let now = Instant::now();
-
-        ExponentialDecayHistogram {
-            values: BTreeMap::new(),
-            alpha,
-            size,
-            count: 0,
-            start_time: now,
-            // we store this explicitly because it's ~10% faster than doing the math on demand
-            next_scale_time: now + RESCALE_THRESHOLD,
-            // using a SmallRng is ~10% faster than using thread_rng()
-            rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
-        }
+    #[deprecated = "use `ExponentialDecayHistogram::builder()` instead"]
+    pub fn with_size_and_alpha(size: usize, alpha: f64) -> Self {
+        Self::builder().size(size).alpha(alpha).build()
     }
 
     /// Inserts a value into the histogram at the current time.
@@ -216,6 +203,64 @@ impl ExponentialDecayHistogram {
                 )
             })
             .collect();
+    }
+}
+
+/// A builder type for [`ExponentialDecayHistogram`] objects.
+pub struct Builder {
+    now: Instant,
+    size: usize,
+    alpha: f64,
+}
+
+impl Builder {
+    /// Sets the construction time of the histogram.
+    ///
+    /// Defaults to the system time when the [`Builder`] was constructed.
+    pub fn at(&mut self, now: Instant) -> &mut Self {
+        self.now = now;
+        self
+    }
+
+    /// Sets the size of the histogram.
+    ///
+    /// A larger size will provide a more accurate histogram, but with a higher memory overhead.
+    ///
+    /// Defaults to 1028, which offers a 99.9% confidence level with a 5% margin of error.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `size` is 0.
+    pub fn size(&mut self, size: usize) -> &mut Self {
+        assert!(size > 0);
+
+        self.size = size;
+        self
+    }
+
+    /// Sets the decay rate of the histogram.
+    ///
+    /// A larger value biases the histogram towards newer values.
+    ///
+    /// Defaults to 0.015, which heavily biases towards the last 5 minutes of values.
+    pub fn alpha(&mut self, alpha: f64) -> &mut Self {
+        self.alpha = alpha;
+        self
+    }
+
+    /// Creates a new [`ExponentialDecayHistogram`].
+    pub fn build(&self) -> ExponentialDecayHistogram {
+        ExponentialDecayHistogram {
+            values: BTreeMap::new(),
+            alpha: self.alpha,
+            size: self.size,
+            count: 0,
+            start_time: self.now,
+            // we store this explicitly because it's ~10% faster than doing the math on demand
+            next_scale_time: self.now + RESCALE_THRESHOLD,
+            // using a SmallRng is ~10% faster than using thread_rng()
+            rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
+        }
     }
 }
 
@@ -321,7 +366,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<(i64, f64)> {
         let (value, mut weight) = match self.it.next() {
             Some(v) => (v.value, v.norm_weight),
-            None => return None
+            None => return None,
         };
 
         loop {
@@ -338,13 +383,15 @@ impl<'a> Iterator for Values<'a> {
 
 #[cfg(test)]
 mod test {
-    use std::ops::Range;
-
     use super::*;
+    use std::ops::Range;
 
     #[test]
     fn a_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .size(100)
+            .alpha(0.99)
+            .build();
         for i in 0..1000 {
             histogram.update(i);
         }
@@ -360,7 +407,10 @@ mod test {
 
     #[test]
     fn a_histogram_of_100_out_of_10_elements() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(100, 0.99);
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .size(100)
+            .alpha(0.99)
+            .build();
         for i in 0..10 {
             histogram.update(i);
         }
@@ -374,7 +424,10 @@ mod test {
 
     #[test]
     fn a_heavily_biased_histogram_of_100_out_of_1000_elements() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.01);
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .size(1000)
+            .alpha(0.01)
+            .build();
         for i in 0..100 {
             histogram.update(i);
         }
@@ -390,8 +443,12 @@ mod test {
 
     #[test]
     fn long_periods_of_inactivity_should_not_corrupt_sampling_state() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(10, 0.015);
-        let mut now = histogram.start_time;
+        let mut now = Instant::now();
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .at(now)
+            .size(10)
+            .alpha(0.015)
+            .build();
 
         // add 1000 values at a rate of 10 values/second
         let delta = Duration::from_millis(100);
@@ -427,8 +484,12 @@ mod test {
 
     #[test]
     fn spot_lift() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut now = Instant::now();
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .at(now)
+            .size(1000)
+            .alpha(0.015)
+            .build();
 
         let values_per_minute = 10;
         let values_interval = Duration::from_secs(60) / values_per_minute;
@@ -450,8 +511,12 @@ mod test {
 
     #[test]
     fn spot_fall() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut now = Instant::now();
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .at(now)
+            .size(1000)
+            .alpha(0.015)
+            .build();
 
         let values_per_minute = 10;
         let values_interval = Duration::from_secs(60) / values_per_minute;
@@ -473,8 +538,12 @@ mod test {
 
     #[test]
     fn quantiles_should_be_based_on_weights() {
-        let mut histogram = ExponentialDecayHistogram::with_size_and_alpha(1000, 0.015);
-        let mut now = histogram.start_time;
+        let mut now = Instant::now();
+        let mut histogram = ExponentialDecayHistogram::builder()
+            .at(now)
+            .size(1000)
+            .alpha(0.015)
+            .build();
 
         for _ in 0..40 {
             histogram.update_at(now, 177);

@@ -3,6 +3,7 @@ name = "exponential-decay-histogram"
 version = "0.1.6"
 authors = ["Steven Fackler <sfackler@gmail.com>"]
 description = "A histogram which exponentially weights in favor of recent values"
+edition = "2018"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/sfackler/exponential-decay-histogram"
 readme = "README.md"
