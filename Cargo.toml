@@ -19,7 +19,7 @@ harness = false
 
 [dependencies]
 ordered-float = "2.0"
-rand = { version = "0.7", features = ["small_rng"] }
+rand = { version = "0.8", features = ["small_rng"] }
 
 [dev-dependencies]
 criterion = "0.3"
