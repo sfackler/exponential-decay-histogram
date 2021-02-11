@@ -55,6 +55,7 @@ use std::time::{Duration, Instant};
 
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
+#[derive(Debug)]
 struct WeightedSample {
     value: i64,
     weight: f64,
@@ -63,6 +64,7 @@ struct WeightedSample {
 /// A histogram which exponentially weights in favor of recent values.
 ///
 /// See the crate level documentation for more details.
+#[derive(Debug)]
 pub struct ExponentialDecayHistogram {
     values: BTreeMap<NotNan<f64>, WeightedSample>,
     alpha: f64,
