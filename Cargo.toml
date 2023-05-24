@@ -22,4 +22,4 @@ ordered-float = "3.0"
 rand = { version = "0.8", features = ["small_rng"] }
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
