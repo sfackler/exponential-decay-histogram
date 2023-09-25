@@ -42,7 +42,6 @@
 //! println!("median: {}", snapshot.value(0.5));
 //! println!("99th percentile: {}", snapshot.value(0.99));
 //! ```
-#![doc(html_root_url = "https://docs.rs/exponential-decay-histogram/0.1")]
 #![warn(missing_docs)]
 use ordered_float::NotNan;
 use rand::distributions::Open01;
