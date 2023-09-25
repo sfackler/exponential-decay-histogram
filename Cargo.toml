@@ -18,7 +18,7 @@ name = "bench"
 harness = false
 
 [dependencies]
-ordered-float = "3.0"
+ordered-float = "4.1"
 rand = { version = "0.8", features = ["small_rng"] }
 
 [dev-dependencies]
