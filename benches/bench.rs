@@ -41,7 +41,7 @@ fn snapshot(b: &mut Bencher) {
 }
 
 fn now(b: &mut Bencher) {
-    b.iter(|| Instant::now());
+    b.iter(Instant::now);
 }
 
 fn main() {
