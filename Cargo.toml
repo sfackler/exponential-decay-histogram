@@ -1,6 +1,6 @@
 [package]
 name = "exponential-decay-histogram"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Steven Fackler <sfackler@gmail.com>"]
 description = "A histogram which exponentially weights in favor of recent values"
 edition = "2018"
