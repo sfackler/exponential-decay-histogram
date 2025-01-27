@@ -48,24 +48,25 @@ use rand::distr::Open01;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::collections::BTreeMap;
-use std::iter;
 use std::slice;
 use std::time::{Duration, Instant};
+use std::{fmt, iter};
 
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
 #[derive(Debug)]
-struct WeightedSample {
+struct WeightedSample<T> {
     value: i64,
+    exemplar: T,
     weight: f64,
 }
 
 /// A histogram which exponentially weights in favor of recent values.
 ///
 /// See the crate level documentation for more details.
-#[derive(Debug)]
-pub struct ExponentialDecayHistogram {
-    values: BTreeMap<NotNan<f64>, WeightedSample>,
+pub struct ExponentialDecayHistogram<T = ()> {
+    values: BTreeMap<NotNan<f64>, WeightedSample<T>>,
+    exemplar_provider: Box<dyn Fn() -> T + Sync + Send>,
     alpha: f64,
     size: usize,
     count: u64,
@@ -74,13 +75,31 @@ pub struct ExponentialDecayHistogram {
     rng: SmallRng,
 }
 
+impl<T> fmt::Debug for ExponentialDecayHistogram<T>
+where
+    T: fmt::Debug,
+{
+    // manual impl to exclude exemplar_provider
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExponentialDecayHistogram")
+            .field("values", &self.values)
+            .field("alpha", &self.alpha)
+            .field("size", &self.size)
+            .field("count", &self.count)
+            .field("start_time", &self.start_time)
+            .field("next_scale_time", &self.next_scale_time)
+            .field("rng", &self.rng)
+            .finish()
+    }
+}
+
 impl Default for ExponentialDecayHistogram {
     fn default() -> ExponentialDecayHistogram {
         ExponentialDecayHistogram::new()
     }
 }
 
-impl ExponentialDecayHistogram {
+impl ExponentialDecayHistogram<()> {
     /// Returns a new histogram with a default configuration.
     pub fn new() -> Self {
         Self::builder().build()
@@ -89,29 +108,18 @@ impl ExponentialDecayHistogram {
     /// Returns a new builder to create a histogram with a custom configuration.
     pub fn builder() -> Builder {
         Builder {
+            exemplar_provider: Box::new(Default::default),
             now: Instant::now(),
             size: 1028,
             alpha: 0.015,
         }
     }
+}
 
-    /// Returns a new histogram configured with the specified size and alpha.
-    ///
-    /// `size` specifies the number of values stored in the histogram. A larger
-    /// size will provide more accurate statistics, but with a higher memory
-    /// overhead.
-    ///
-    /// `alpha` specifies the exponential decay factor. A larger factor biases
-    /// the histogram towards newer values.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `size` is zero.
-    #[deprecated = "use `ExponentialDecayHistogram::builder()` instead"]
-    pub fn with_size_and_alpha(size: usize, alpha: f64) -> Self {
-        Self::builder().size(size).alpha(alpha).build()
-    }
-
+impl<T> ExponentialDecayHistogram<T>
+where
+    T: Clone,
+{
     /// Inserts a value into the histogram at the current time.
     pub fn update(&mut self, value: i64) {
         self.update_at(Instant::now(), value);
@@ -129,6 +137,7 @@ impl ExponentialDecayHistogram {
         let item_weight = self.weight(time);
         let sample = WeightedSample {
             value,
+            exemplar: (self.exemplar_provider)(),
             weight: item_weight,
         };
         // Open01 since we don't want to divide by 0
@@ -146,12 +155,13 @@ impl ExponentialDecayHistogram {
     }
 
     /// Takes a snapshot of the current state of the histogram.
-    pub fn snapshot(&self) -> Snapshot {
+    pub fn snapshot(&self) -> Snapshot<T> {
         let mut entries = self
             .values
             .values()
             .map(|s| SnapshotEntry {
                 value: s.value,
+                exemplar: s.exemplar.clone(),
                 norm_weight: s.weight,
                 quantile: NotNan::new(0.).unwrap(),
             })
@@ -199,6 +209,7 @@ impl ExponentialDecayHistogram {
                     k * scaling_factor,
                     WeightedSample {
                         value: v.value,
+                        exemplar: v.exemplar.clone(),
                         weight: v.weight * scaling_factor,
                     },
                 )
@@ -208,17 +219,19 @@ impl ExponentialDecayHistogram {
 }
 
 /// A builder type for [`ExponentialDecayHistogram`] objects.
-pub struct Builder {
+pub struct Builder<T = ()> {
+    exemplar_provider: Box<dyn Fn() -> T + Sync + Send>,
     now: Instant,
     size: usize,
     alpha: f64,
 }
 
-impl Builder {
+impl<T> Builder<T> {
     /// Sets the construction time of the histogram.
     ///
     /// Defaults to the system time when the [`Builder`] was constructed.
-    pub fn at(&mut self, now: Instant) -> &mut Self {
+    #[inline]
+    pub fn at(mut self, now: Instant) -> Self {
         self.now = now;
         self
     }
@@ -232,7 +245,8 @@ impl Builder {
     /// # Panics
     ///
     /// Panics if `size` is 0.
-    pub fn size(&mut self, size: usize) -> &mut Self {
+    #[inline]
+    pub fn size(mut self, size: usize) -> Self {
         assert!(size > 0);
 
         self.size = size;
@@ -244,15 +258,34 @@ impl Builder {
     /// A larger value biases the histogram towards newer values.
     ///
     /// Defaults to 0.015, which heavily biases towards the last 5 minutes of values.
-    pub fn alpha(&mut self, alpha: f64) -> &mut Self {
+    #[inline]
+    pub fn alpha(mut self, alpha: f64) -> Self {
         self.alpha = alpha;
         self
     }
 
+    /// Sets the exemplar type and provider of the histogram.
+    ///
+    /// Defaults to an exemplar type of `()`.
+    #[inline]
+    pub fn exemplar_provider<U>(
+        self,
+        exemplar_provider: impl Fn() -> U + 'static + Sync + Send,
+    ) -> Builder<U> {
+        Builder {
+            exemplar_provider: Box::new(exemplar_provider),
+            now: self.now,
+            size: self.size,
+            alpha: self.alpha,
+        }
+    }
+
     /// Creates a new [`ExponentialDecayHistogram`].
-    pub fn build(&self) -> ExponentialDecayHistogram {
+    #[inline]
+    pub fn build(self) -> ExponentialDecayHistogram<T> {
         ExponentialDecayHistogram {
             values: BTreeMap::new(),
+            exemplar_provider: self.exemplar_provider,
             alpha: self.alpha,
             size: self.size,
             count: 0,
@@ -265,19 +298,20 @@ impl Builder {
     }
 }
 
-struct SnapshotEntry {
+struct SnapshotEntry<T> {
     value: i64,
+    exemplar: T,
     norm_weight: f64,
     quantile: NotNan<f64>,
 }
 
 /// A snapshot of the state of an `ExponentialDecayHistogram` at some point in time.
-pub struct Snapshot {
-    entries: Vec<SnapshotEntry>,
+pub struct Snapshot<T = ()> {
+    entries: Vec<SnapshotEntry<T>>,
     count: u64,
 }
 
-impl Snapshot {
+impl<T> Snapshot<T> {
     /// Returns the value at a specified quantile in the snapshot, or 0 if it is
     /// empty.
     ///
@@ -288,7 +322,7 @@ impl Snapshot {
     ///
     /// Panics if `quantile` is not between 0 and 1 (inclusive).
     pub fn value(&self, quantile: f64) -> i64 {
-        assert!(quantile >= 0. && quantile <= 1.);
+        assert!((0. ..=1.).contains(&quantile));
 
         if self.entries.is_empty() {
             return 0;
@@ -349,19 +383,26 @@ impl Snapshot {
     }
 
     /// Returns an iterator over the distinct values in the snapshot along with their weights.
-    pub fn values<'a>(&'a self) -> Values<'a> {
+    pub fn values(&self) -> Values<'_, T> {
         Values {
             it: self.entries.iter().peekable(),
+        }
+    }
+
+    /// Returns an iterator over the values in the snapshot along with their exemplars.
+    pub fn exemplars(&self) -> Exemplars<'_, T> {
+        Exemplars {
+            it: self.entries.iter(),
         }
     }
 }
 
 /// An iterator over the distinct values in a snapshot along with their weights.
-pub struct Values<'a> {
-    it: iter::Peekable<slice::Iter<'a, SnapshotEntry>>,
+pub struct Values<'a, T> {
+    it: iter::Peekable<slice::Iter<'a, SnapshotEntry<T>>>,
 }
 
-impl<'a> Iterator for Values<'a> {
+impl<T> Iterator for Values<'_, T> {
     type Item = (i64, f64);
 
     fn next(&mut self) -> Option<(i64, f64)> {
@@ -379,6 +420,19 @@ impl<'a> Iterator for Values<'a> {
         }
 
         Some((value, weight))
+    }
+}
+
+/// An iterator over the values in the snapshot along with their exemplars.
+pub struct Exemplars<'a, T> {
+    it: slice::Iter<'a, SnapshotEntry<T>>,
+}
+
+impl<'a, T> Iterator for Exemplars<'a, T> {
+    type Item = (i64, &'a T);
+
+    fn next(&mut self) -> Option<(i64, &'a T)> {
+        self.it.next().map(|e| (e.value, &e.exemplar))
     }
 }
 
