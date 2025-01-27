@@ -44,7 +44,7 @@
 //! ```
 #![warn(missing_docs)]
 use ordered_float::NotNan;
-use rand::distributions::Open01;
+use rand::distr::Open01;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::collections::BTreeMap;
@@ -260,7 +260,7 @@ impl Builder {
             // we store this explicitly because it's ~10% faster than doing the math on demand
             next_scale_time: self.now + RESCALE_THRESHOLD,
             // using a SmallRng is ~10% faster than using thread_rng()
-            rng: SmallRng::from_rng(rand::thread_rng()).expect("error seeding RNG"),
+            rng: SmallRng::from_rng(&mut rand::rng()),
         }
     }
 }
