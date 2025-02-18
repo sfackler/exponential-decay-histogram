@@ -166,7 +166,7 @@ impl ExponentialDecayHistogram {
 
         entries.iter_mut().fold(NotNan::new(0.).unwrap(), |acc, e| {
             e.quantile = acc;
-            acc + e.norm_weight
+            acc + NotNan::new(e.norm_weight).unwrap()
         });
 
         Snapshot {
@@ -189,7 +189,8 @@ impl ExponentialDecayHistogram {
         self.next_scale_time = now + RESCALE_THRESHOLD;
         let old_start_time = self.start_time;
         self.start_time = now;
-        let scaling_factor = (-self.alpha * (now - old_start_time).as_secs() as f64).exp();
+        let scaling_factor =
+            NotNan::new((-self.alpha * (now - old_start_time).as_secs() as f64).exp()).unwrap();
 
         self.values = self
             .values
@@ -199,7 +200,7 @@ impl ExponentialDecayHistogram {
                     k * scaling_factor,
                     WeightedSample {
                         value: v.value,
-                        weight: v.weight * scaling_factor,
+                        weight: v.weight * *scaling_factor,
                     },
                 )
             })
