@@ -289,7 +289,7 @@ impl Snapshot {
     ///
     /// Panics if `quantile` is not between 0 and 1 (inclusive).
     pub fn value(&self, quantile: f64) -> i64 {
-        assert!(quantile >= 0. && quantile <= 1.);
+        assert!((0. ..=1.).contains(&quantile));
 
         if self.entries.is_empty() {
             return 0;
