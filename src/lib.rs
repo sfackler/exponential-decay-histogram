@@ -277,7 +277,7 @@ impl Builder {
     }
 
     /// Creates a new [`ExponentialDecayHistogram`].
-    pub fn build(&self) -> ExponentialDecayHistogram {
+    pub fn build<T>(&self) -> ExponentialDecayHistogram<T> {
         ExponentialDecayHistogram {
             values: BTreeMap::new(),
             alpha: self.alpha,
