@@ -55,8 +55,9 @@ use std::time::{Duration, Instant};
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
 #[derive(Debug)]
-struct WeightedSample {
+struct WeightedSample<T> {
     value: i64,
+    exemplar: T,
     weight: f64,
 }
 
@@ -64,8 +65,8 @@ struct WeightedSample {
 ///
 /// See the crate level documentation for more details.
 #[derive(Debug)]
-pub struct ExponentialDecayHistogram {
-    values: BTreeMap<NotNan<f64>, WeightedSample>,
+pub struct ExponentialDecayHistogram<T = ()> {
+    values: BTreeMap<NotNan<f64>, WeightedSample<T>>,
     alpha: f64,
     size: usize,
     count: u64,
@@ -123,12 +124,28 @@ impl ExponentialDecayHistogram {
     ///
     /// May panic if values are inserted at non-monotonically increasing times.
     pub fn update_at(&mut self, time: Instant, value: i64) {
+        self.update_at_ex(time, value, ());
+    }
+}
+
+impl<T> ExponentialDecayHistogram<T>
+where
+    T: Clone,
+{
+    /// Like [`Self::update`], except that it additionally takes an exemplar.
+    pub fn update_ex(&mut self, value: i64, exemplar: T) {
+        self.update_at_ex(Instant::now(), value, exemplar);
+    }
+
+    /// Like [`Self::update_at`], except that it additionally takes an exemplar.
+    pub fn update_at_ex(&mut self, time: Instant, value: i64, exemplar: T) {
         self.rescale_if_needed(time);
         self.count += 1;
 
         let item_weight = self.weight(time);
         let sample = WeightedSample {
             value,
+            exemplar,
             weight: item_weight,
         };
         // Open01 since we don't want to divide by 0
@@ -146,12 +163,13 @@ impl ExponentialDecayHistogram {
     }
 
     /// Takes a snapshot of the current state of the histogram.
-    pub fn snapshot(&self) -> Snapshot {
+    pub fn snapshot(&self) -> Snapshot<T> {
         let mut entries = self
             .values
             .values()
             .map(|s| SnapshotEntry {
                 value: s.value,
+                exemplar: s.exemplar.clone(),
                 norm_weight: s.weight,
                 quantile: NotNan::new(0.).unwrap(),
             })
@@ -200,6 +218,7 @@ impl ExponentialDecayHistogram {
                     k * scaling_factor,
                     WeightedSample {
                         value: v.value,
+                        exemplar: v.exemplar.clone(),
                         weight: v.weight * *scaling_factor,
                     },
                 )
@@ -266,19 +285,20 @@ impl Builder {
     }
 }
 
-struct SnapshotEntry {
+struct SnapshotEntry<T> {
     value: i64,
+    exemplar: T,
     norm_weight: f64,
     quantile: NotNan<f64>,
 }
 
 /// A snapshot of the state of an `ExponentialDecayHistogram` at some point in time.
-pub struct Snapshot {
-    entries: Vec<SnapshotEntry>,
+pub struct Snapshot<T = ()> {
+    entries: Vec<SnapshotEntry<T>>,
     count: u64,
 }
 
-impl Snapshot {
+impl<T> Snapshot<T> {
     /// Returns the value at a specified quantile in the snapshot, or 0 if it is
     /// empty.
     ///
@@ -350,16 +370,23 @@ impl Snapshot {
     }
 
     /// Returns an iterator over the distinct values in the snapshot along with their weights.
-    pub fn values<'a>(&'a self) -> Values<'a> {
+    pub fn values<'a>(&'a self) -> Values<'a, T> {
         Values {
             it: self.entries.iter().peekable(),
+        }
+    }
+
+    /// Returns an iterator over the values in the snapshot along with their exemplars.
+    pub fn exemplars(&self) -> Exemplars<'_, T> {
+        Exemplars {
+            it: self.entries.iter(),
         }
     }
 }
 
 /// An iterator over the distinct values in a snapshot along with their weights.
-pub struct Values<'a> {
-    it: iter::Peekable<slice::Iter<'a, SnapshotEntry>>,
+pub struct Values<'a, T = ()> {
+    it: iter::Peekable<slice::Iter<'a, SnapshotEntry<T>>>,
 }
 
 impl<'a> Iterator for Values<'a> {
@@ -380,6 +407,19 @@ impl<'a> Iterator for Values<'a> {
         }
 
         Some((value, weight))
+    }
+}
+
+/// An iterator over the values in the snapshot along with their exemplars.
+pub struct Exemplars<'a, T> {
+    it: slice::Iter<'a, SnapshotEntry<T>>,
+}
+
+impl<'a, T> Iterator for Exemplars<'a, T> {
+    type Item = (i64, &'a T);
+
+    fn next(&mut self) -> Option<(i64, &'a T)> {
+        self.it.next().map(|e| (e.value, &e.exemplar))
     }
 }
 
