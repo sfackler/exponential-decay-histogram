@@ -9,6 +9,13 @@
 //! randomized subset. This allows us to put bounds on overall memory use
 //! regardless of the rate of events.
 //!
+//! Each sample in the histogram is composed of an `i64` value that contributes
+//! to the histogram's statistics and an exemplar, which is an arbitrary value
+//! that is tracked by the histogram as long the sample is retained. By
+//! default, the exemplar type is simply `()`, but consumers that want to use
+//! exemplars can pick a different type and pass it into the histogram with the
+//! [`ExponentialDecayHistogram::update_ex`] method.
+//!
 //! This implementation is based on the `ExponentiallyDecayingReservoir` class
 //! in the Java [Metrics][1] library, which is itself based on the forward decay
 //! model described in [Cormode et al. 2009][2].
