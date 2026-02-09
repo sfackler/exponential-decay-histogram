@@ -53,7 +53,7 @@
 use ordered_float::NotNan;
 use rand::distr::Open01;
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use std::collections::BTreeMap;
 use std::iter;
 use std::slice;
