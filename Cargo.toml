@@ -10,9 +10,6 @@ readme = "README.md"
 categories = ["data-structures"]
 keywords = ["metrics", "statistics"]
 
-[badges]
-circle-ci = { repository = "sfackler/exponential-decay-histogram" }
-
 [[bench]]
 name = "bench"
 harness = false
