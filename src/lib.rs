@@ -57,7 +57,12 @@ use rand::{RngExt, SeedableRng};
 use std::collections::BTreeMap;
 use std::iter;
 use std::slice;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 
@@ -436,6 +441,7 @@ mod test {
     use std::ops::Range;
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn a_histogram_of_100_out_of_1000_elements() {
         let mut histogram = ExponentialDecayHistogram::builder()
             .size(100)
@@ -455,6 +461,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn a_histogram_of_100_out_of_10_elements() {
         let mut histogram = ExponentialDecayHistogram::builder()
             .size(100)
@@ -472,6 +479,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn a_heavily_biased_histogram_of_100_out_of_1000_elements() {
         let mut histogram = ExponentialDecayHistogram::builder()
             .size(1000)
@@ -491,6 +499,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn long_periods_of_inactivity_should_not_corrupt_sampling_state() {
         let mut now = Instant::now();
         let mut histogram = ExponentialDecayHistogram::builder()
@@ -532,6 +541,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn spot_lift() {
         let mut now = Instant::now();
         let mut histogram = ExponentialDecayHistogram::builder()
@@ -559,6 +569,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn spot_fall() {
         let mut now = Instant::now();
         let mut histogram = ExponentialDecayHistogram::builder()
@@ -586,6 +597,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn quantiles_should_be_based_on_weights() {
         let mut now = Instant::now();
         let mut histogram = ExponentialDecayHistogram::builder()
@@ -626,6 +638,7 @@ mod test {
     }
 
     #[test]
+    #[wasm_bindgen_test::wasm_bindgen_test]
     fn values() {
         let mut histogram = ExponentialDecayHistogram::new();
         let now = histogram.start_time;
