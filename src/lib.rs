@@ -59,7 +59,7 @@ use std::iter;
 use std::slice;
 use std::time::Duration;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(all(target_arch = "wasm32", feature = "js")))]
 use std::time::Instant;
 #[cfg(all(target_arch = "wasm32", feature = "js"))]
 use web_time::Instant;
