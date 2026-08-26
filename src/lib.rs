@@ -57,11 +57,11 @@ use rand::{RngExt, SeedableRng};
 use std::collections::BTreeMap;
 use std::iter;
 use std::slice;
-use std::time::{Duration};
+use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "js"))]
 use web_time::Instant;
 
 const RESCALE_THRESHOLD: Duration = Duration::from_secs(60 * 60);
